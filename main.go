@@ -1,9 +1,11 @@
 package main
 
 import (
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 const CONTROL_FILE = "/tmp/gpio-demo-control/status"
@@ -20,14 +22,29 @@ func writeStatus(status string) error {
 	return os.WriteFile(CONTROL_FILE, []byte(status), 0o644)
 }
 
-var nextState = map[string]string{
-	"ready":   "enqueued",
-	"running": "dequeued",
+type setStatusHandler struct {
+	status string
+}
+
+func (h *setStatusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	err := writeStatus(h.status)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func main() {
-	http.HandleFunc("/advance", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
+	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -39,16 +56,16 @@ func main() {
 			return
 		}
 
-		next, ok := nextState[status]
-		if !ok {
-			log.Println("advance called when status is", status)
-			http.Error(w, status, http.StatusServiceUnavailable)
-			return
+		w.WriteHeader(http.StatusOK)
+		_, err = io.Copy(w, strings.NewReader(status))
+		if err != nil {
+			log.Println(err)
 		}
-
-		writeStatus(next)
-		w.WriteHeader(http.StatusNoContent)
 	})
+
+	http.Handle("/enable", &setStatusHandler{"enabling"})
+	http.Handle("/disable", &setStatusHandler{"disabling"})
+	http.Handle("/stop", &setStatusHandler{"stopping"})
 
 	http.ListenAndServe(":64684", nil)
 }
