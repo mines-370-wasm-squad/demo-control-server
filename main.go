@@ -63,9 +63,9 @@ func main() {
 		}
 	})
 
-	http.Handle("/enable", &setStatusHandler{"enabling"})
-	http.Handle("/disable", &setStatusHandler{"disabling"})
-	http.Handle("/stop", &setStatusHandler{"stopping"})
+	http.Handle("/enable", &setStatusHandler{"enabled"})
+	http.Handle("/disable", &setStatusHandler{"disabled"})
+	http.Handle("/stop", &setStatusHandler{"stopped"})
 
 	http.ListenAndServe(":64684", nil)
 }
